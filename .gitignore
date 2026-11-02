@@ -1,1 +1,6 @@
-
+ token.txt
+   woo.txt
+   meta.txt
+   budget.txt
+   *.json
+   __pycache__/
