@@ -1,0 +1,3 @@
+PAGE_ID=your_facebook_page_id
+PAGE_TOKEN=your_page_access_token
+IG_USER_ID=optional_instagram_business_id

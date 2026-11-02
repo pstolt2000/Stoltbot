@@ -1,0 +1,2 @@
+ck_your_consumer_key_here
+cs_your_consumer_secret_here

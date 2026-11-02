@@ -1,0 +1,2 @@
+URL=https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec
+SECRET=your_secret_from_makeSecret

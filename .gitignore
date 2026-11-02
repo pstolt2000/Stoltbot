@@ -1,4 +1,5 @@
-token.txt 
+# Private keys and personal data: never upload these
+token.txt
 woo.txt
 meta.txt
 budget.txt
