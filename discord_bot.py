@@ -25,6 +25,7 @@ Personal budget (talks to your Google Sheet; replies are private):
   /exam             - practice exam: 10, 20 or 40 questions with a final score
   /pantry ...       - pantry inventory (low stock goes on the grocery list)
   /trip ...         - vacation planner (savings, countdown, flights, hotels & bookings, itinerary, quotes)   /pack ... - packing list
+  /resume ...       - build a resume step by step and get it as a PDF (lives in resume_bot.py)
 Sold-out cleanup: when a kit sells out, it's marked sold, pulled from Google Shopping, and a "Just sold!" post goes to #new-kits.
 Social poster: new kits published on the website are posted to Facebook + Instagram automatically.
 Listing helper: drop kit photos in #add-listing -> StoltBot cleans them up -> click a button -> draft product.
@@ -2213,6 +2214,15 @@ async def exam(interaction: discord.Interaction, length: Optional[app_commands.C
     ex = {"id": random.randint(100000, 999999), "qs": qs, "i": 0, "correct": 0, "log": []}
     EXAMS[interaction.user.id] = ex
     await interaction.response.send_message(embed=exam_question_embed(ex), view=exam_buttons("answer"), ephemeral=True)
+
+
+# ===== RESUME BUILDER (resume_bot.py) =====
+# If it ever fails to load (e.g. fpdf2 missing), the rest of StoltBot keeps running.
+try:
+    import resume_bot
+    resume_bot.setup(bot)
+except Exception as e:
+    print(f"⚠️ Resume builder is off: {e}")
 
 
 bot.run(TOKEN)

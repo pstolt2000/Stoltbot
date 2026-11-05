@@ -25,12 +25,17 @@ It runs 24/7 on a small hosted server and is used every day by a real handmade d
 - Daily CompTIA Security+ practice question, `/quiz`, and `/exam` practice exams
 - Score tracking by domain, streaks, weakest-area practice, and review of missed questions
 
+### 📄 Resume builder
+- `/resume ...`: anyone in the server builds a resume step by step with pop-up forms, privately
+- Download it as a **PDF** in a Modern or Classic style, with a `/resume check` that flags weak bullets and missing info
+- Backup and restore with `/resume export` / `/resume import`
+
 ### 📧 Email automation (Apps Script)
 - `gmail_bot.gs`: labels and archives personal mail, sends a daily summary
 - `store_email_bot.gs`: sorts customer email, flags what needs a reply, drafts answers to common questions
 
 ## Tech
-Python 3.11 · discord.py (slash commands, buttons, modals, scheduled tasks) · aiohttp · Pillow ·
+Python 3.11 · discord.py (slash commands, buttons, modals, scheduled tasks) · aiohttp · Pillow · fpdf2 ·
 WooCommerce REST API · Google Apps Script (web app, time-based triggers, Gmail, Sheets) · Meta Graph API
 
 ## Security
