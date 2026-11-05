@@ -37,6 +37,7 @@ Setup:
   3. python discord_bot.py
 """
 
+import os
 import random
 import pathlib
 import re
@@ -54,6 +55,10 @@ import datetime
 from PIL import Image, ImageOps, ImageChops
 
 # ===== SETTINGS =====
+# Where saved progress (orders seen, quiz scores, resumes...) is kept.
+# On Railway, point the DATA_DIR variable at a Volume (e.g. /data) so it survives redeploys.
+DATA_DIR = pathlib.Path(os.environ.get("DATA_DIR") or pathlib.Path(__file__).parent)
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 WELCOME_CHANNEL_NAME = "general"
 
 # Diamond Nook announcer
@@ -196,7 +201,7 @@ async def find_category(text: str):
 # ===== ORDER ALERTS =====
 ORDERS_CHANNEL_NAME = "orders"          # make a private #orders channel; StoltBot posts new orders there
 PAID_STATUSES = "processing,on-hold,completed"   # unpaid/abandoned checkouts (pending, failed) are skipped
-ORDER_STATE_FILE = pathlib.Path(__file__).with_name("orders_seen.json")
+ORDER_STATE_FILE = DATA_DIR / "orders_seen.json"
 
 
 async def fetch_orders(count=20):
@@ -388,7 +393,7 @@ async def before_watchdog():
 #   IG_USER_ID=1784...            (optional: Instagram Business account ID)
 META_FILE = "meta.txt"
 GRAPH = "https://graph.facebook.com/v25.0"
-SOCIAL_STATE_FILE = pathlib.Path(__file__).with_name("social_seen.json")
+SOCIAL_STATE_FILE = DATA_DIR / "social_seen.json"
 HASHTAGS = "#diamondart #diamondpainting #handmade #oneofakind #giftideas #DenasDiamondNook"
 
 
@@ -1939,7 +1944,7 @@ QUIZ = [
 LETTERS = "ABCD"
 
 # ---- Score tracker (saved in quiz_scores.json next to the bot) ----
-SCORE_FILE = pathlib.Path(__file__).with_name("quiz_scores.json")
+SCORE_FILE = DATA_DIR / "quiz_scores.json"
 DOMAINS = ["1 General concepts", "2 Threats", "3 Architecture", "4 Operations", "5 Program management"]
 
 

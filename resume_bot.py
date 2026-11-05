@@ -24,7 +24,7 @@ Everything is private ("only you can see this"), and each person's resume is kep
 Hooked up from discord_bot.py with:   import resume_bot; resume_bot.setup(bot)
 
 Data is saved in resumes.json next to the bot (or in the folder named by the
-RESUME_DATA_DIR environment variable, e.g. a Railway Volume, so it survives redeploys).
+DATA_DIR environment variable, e.g. a Railway Volume, so it survives redeploys).
 """
 
 import io
@@ -40,7 +40,7 @@ from discord import app_commands
 from fpdf import FPDF
 
 # ===== SETTINGS =====
-DATA_DIR = pathlib.Path(os.environ.get("RESUME_DATA_DIR") or pathlib.Path(__file__).parent)
+DATA_DIR = pathlib.Path(os.environ.get("DATA_DIR") or os.environ.get("RESUME_DATA_DIR") or pathlib.Path(__file__).parent)
 DATA_FILE = DATA_DIR / "resumes.json"
 COLOR = discord.Color.from_rgb(52, 152, 219)   # embed color
 MAX_JOBS = 15
