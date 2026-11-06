@@ -54,6 +54,20 @@ from zoneinfo import ZoneInfo
 import datetime
 from PIL import Image, ImageOps, ImageChops
 
+# On Railway, keys come from Variables instead of .txt files
+HERE = pathlib.Path(__file__).parent
+env = os.environ.get
+if env("DISCORD_TOKEN"):
+    (HERE / "token.txt").write_text(env("DISCORD_TOKEN"), encoding="utf-8")
+if env("WOO_KEY") and env("WOO_SECRET"):
+    (HERE / "woo.txt").write_text(f"{env('WOO_KEY')}\n{env('WOO_SECRET')}", encoding="utf-8")
+if env("BUDGET_URL") and env("BUDGET_SECRET"):
+    (HERE / "budget.txt").write_text(f"URL={env('BUDGET_URL')}\nSECRET={env('BUDGET_SECRET')}", encoding="utf-8")
+if env("META_PAGE_ID") and env("META_PAGE_TOKEN"):
+    (HERE / "meta.txt").write_text(
+        f"PAGE_ID={env('META_PAGE_ID')}\nPAGE_TOKEN={env('META_PAGE_TOKEN')}\nIG_USER_ID={env('META_IG_USER_ID', '')}",
+        encoding="utf-8")
+
 # ===== SETTINGS =====
 # Where saved progress (orders seen, quiz scores, resumes...) is kept.
 # On Railway, point the DATA_DIR variable at a Volume (e.g. /data) so it survives redeploys.
