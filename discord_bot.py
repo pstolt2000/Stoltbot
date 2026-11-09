@@ -342,15 +342,28 @@ async def google_shopping_report():
     """Returns (embed, has_problems)."""
     stats = await gla_get("mc/product-statistics")
     issues = await gla_get("mc/issues/product", {"per_page": 50})
+    # Account-level problems (e.g. "Misrepresentation") block EVERY product, so check those too
+    try:
+        account = await gla_get("mc/issues/account", {"per_page": 50})
+    except Exception as e:
+        print(f"⚠️ Couldn't read account-level Google issues: {e}")
+        account = {}
     s = (stats or {}).get("statistics") or {}
+    acct = (account or {}).get("issues", []) or []
+    acct_errors = [i for i in acct if i.get("severity") == "error"]
+    acct_warnings = [i for i in acct if i.get("severity") != "error"]
     errors = [i for i in issues.get("issues", []) if i.get("severity") == "error"]
     warnings = [i for i in issues.get("issues", []) if i.get("severity") != "error"]
-    bad = int(s.get("disapproved") or 0) > 0 or bool(errors)
+    bad = int(s.get("disapproved") or 0) > 0 or bool(errors) or bool(acct_errors)
+    approved = int(s.get("active") or 0)
+    # All zeros means Google sent no numbers yet, which is NOT the same as "all good"
+    unknown = not bad and approved == 0 and not any(int(s.get(k) or 0) for k in ("pending", "expiring"))
 
+    status = " — needs attention" if bad else (" — no products showing yet" if unknown else " — all good")
     embed = discord.Embed(
-        title="🛍️ Google Shopping check" + (" — needs attention" if bad else " — all good"),
+        title="🛍️ Google Shopping check" + status,
         url=f"{STORE_URL}/wp-admin/admin.php?page=wc-admin&path=/google/product-feed",
-        color=discord.Color.red() if bad else discord.Color.green(),
+        color=discord.Color.red() if bad else (discord.Color.gold() if unknown else discord.Color.green()),
     )
     for label, key, icon in (("Approved", "active", "✅"), ("Pending", "pending", "⏳"),
                              ("Expiring", "expiring", "⌛"), ("Disapproved", "disapproved", "❌"),
@@ -366,6 +379,15 @@ async def google_shopping_report():
             out.append(f"…and {len(items) - limit} more")
         return "\n".join(out)[:1024]
 
+    if acct_errors:
+        embed.add_field(name=f"🚫 Account problems — block ALL products ({len(acct_errors)})",
+                        value=lines(acct_errors, 6), inline=False)
+    if acct_warnings:
+        embed.add_field(name=f"⚠️ Account warnings ({len(acct_warnings)})", value=lines(acct_warnings, 4), inline=False)
+    if unknown:
+        embed.add_field(name="ℹ️ No approved products", inline=False,
+                        value="Google isn't showing any products yet. Open Merchant Center to check for "
+                              "account issues: https://merchants.google.com/")
     if errors:
         embed.add_field(name=f"❌ Problems to fix ({len(errors)})", value=lines(errors, 8), inline=False)
     if warnings:
