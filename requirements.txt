@@ -2,3 +2,5 @@ discord.py
 Pillow
 tzdata
 fpdf2
+numpy
+opencv-python-headless

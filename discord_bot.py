@@ -53,7 +53,7 @@ import csv
 import asyncio
 from zoneinfo import ZoneInfo
 import datetime
-from PIL import Image, ImageOps, ImageChops
+from PIL import Image, ImageOps, ImageChops, ImageEnhance, ImageFilter
 
 # On Railway, keys come from Variables instead of .txt files
 HERE = pathlib.Path(__file__).parent
@@ -813,17 +813,126 @@ MAX_PHOTOS = 6
 MAX_SIZE = 1600                         # longest side in pixels (fast to load on the website)
 
 
+# Smart cleanup for photos of finished paintings (phone photo on a table/floor):
+# find the canvas, straighten it, crop to just the picture, fix dim lighting.
+# Needs opencv-python-headless + numpy; without them the simple cleanup below is used.
+try:
+    import numpy as np
+    import cv2
+except Exception:
+    np = cv2 = None
+
+
+def _order(pts):
+    pts = pts.reshape(4, 2).astype("float32")
+    s, d = pts.sum(1), np.diff(pts, axis=1).ravel()
+    return np.array([pts[s.argmin()], pts[d.argmin()], pts[s.argmax()], pts[d.argmax()]], dtype="float32")
+
+
+def _warp(img, quad):
+    tl, tr, br, bl = quad
+    w = int(max(np.linalg.norm(br - bl), np.linalg.norm(tr - tl)))
+    h = int(max(np.linalg.norm(tr - br), np.linalg.norm(tl - bl)))
+    M = cv2.getPerspectiveTransform(quad, np.float32([[0, 0], [w - 1, 0], [w - 1, h - 1], [0, h - 1]]))
+    return cv2.warpPerspective(img, M, (w, h))
+
+
+def _find_canvas(bgr):
+    """Biggest bright 4-sided shape (the canvas sheet with its white border)."""
+    small = 900 / max(bgr.shape[:2])
+    sm = cv2.resize(bgr, None, fx=small, fy=small)
+    hsv = cv2.cvtColor(sm, cv2.COLOR_BGR2HSV)
+    # canvas border: bright, low saturation
+    mask = cv2.inRange(hsv, (0, 0, 150), (180, 70, 255))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((15, 15), np.uint8))
+    # fill holes so the painting inside counts as part of the sheet
+    cnts, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not cnts:
+        return None
+    c = max(cnts, key=cv2.contourArea)
+    if cv2.contourArea(c) < 0.15 * sm.shape[0] * sm.shape[1]:
+        return None
+    hull = cv2.convexHull(c)
+    for eps in (0.02, 0.03, 0.04, 0.06):
+        approx = cv2.approxPolyDP(hull, eps * cv2.arcLength(hull, True), True)
+        if len(approx) == 4:
+            return _order(approx / small)
+    rect = cv2.boxPoints(cv2.minAreaRect(hull))
+    return _order(rect / small)
+
+
+def _longest_run(flags):
+    best, cur, start = (0, 0), 0, 0
+    for i, f in enumerate(flags):
+        if f:
+            if cur == 0:
+                start = i
+            cur += 1
+            if cur > best[1] - best[0]:
+                best = (start, i + 1)
+        else:
+            cur = 0
+    return best
+
+
+def _find_art(bgr):
+    """Inside the flattened canvas: the drilled picture, without the white margin, charts and text."""
+    H, W = bgr.shape[:2]
+    g = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    mu = cv2.blur(g, (9, 9))
+    sd = np.sqrt(np.maximum(cv2.blur(g * g, (9, 9)) - mu * mu, 0))
+    # the printed margin is bright and smooth; the drilled picture is textured or darker
+    white = (mu > np.percentile(mu, 97) * 0.8) & (sd < 10)
+    pic = ~white
+    # measure columns in a middle band of rows and rows in a middle band of columns,
+    # which skips the color charts that sit in the corners of the margin
+    cols = pic[int(H * 0.35):int(H * 0.6), :].mean(0)
+    rows = pic[:, int(W * 0.3):int(W * 0.7)].mean(1)
+    def runs(profile, size, level, gap_frac):
+        flags = (profile > level).astype(np.uint8).reshape(1, -1) * 255
+        gap = max(3, int(size * gap_frac))      # bridge bright spots inside the picture (a moon, a sky)
+        flags = cv2.morphologyEx(flags, cv2.MORPH_CLOSE, np.ones((1, gap), np.uint8)).ravel() > 0
+        return _longest_run(flags)
+    x0, x1 = runs(cols, W, 0.6, 0.08)
+    # rows: measure across the whole picture width now that we know it
+    rows = pic[:, x0 + (x1 - x0) // 10:x1 - (x1 - x0) // 10].mean(1)
+    y0, y1 = runs(rows, H, 0.85, 0.012)
+    if x1 - x0 < W * 0.5 or y1 - y0 < H * 0.5:
+        return None
+    pad = int(min(W, H) * 0.015)
+    return bgr[y0 + pad:y1 - pad, x0 + pad:x1 - pad]
+
+
 def clean_photo(data: bytes) -> bytes:
-    """Rotate the photo the right way up, trim plain borders, shrink it, save as JPEG."""
-    img = Image.open(io.BytesIO(data))
-    img = ImageOps.exif_transpose(img)            # phone photos often come in sideways
-    img = img.convert("RGB")
-    # Trim plain borders (white/black edges from scans or screenshots)
-    bg = Image.new("RGB", img.size, img.getpixel((0, 0)))
-    diff = ImageChops.add(ImageChops.difference(img, bg), ImageChops.difference(img, bg), 2.0, -30)
-    box = diff.getbbox()
-    if box and (box[2] - box[0]) > img.width * 0.5 and (box[3] - box[1]) > img.height * 0.5:
-        img = img.crop(box)
+    """Rotate upright, straighten + crop a painting photo to just the picture, fix lighting, shrink."""
+    img = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert("RGB")
+    smart = False
+    if cv2 is not None:
+        try:
+            bgr = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+            quad = _find_canvas(bgr)
+            if quad is not None:
+                bgr = _warp(bgr, quad)
+                art = _find_art(bgr)
+                if art is not None and art.size:
+                    bgr = art
+                img = Image.fromarray(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))
+                smart = True
+        except Exception as e:
+            print(f"⚠️ Smart photo cleanup skipped: {e}")
+    if not smart:
+        # Trim plain borders (white/black edges from scans or screenshots)
+        bg = Image.new("RGB", img.size, img.getpixel((0, 0)))
+        diff = ImageChops.add(ImageChops.difference(img, bg), ImageChops.difference(img, bg), 2.0, -30)
+        box = diff.getbbox()
+        if box and (box[2] - box[0]) > img.width * 0.5 and (box[3] - box[1]) > img.height * 0.5:
+            img = img.crop(box)
+    # Lighting: stretch contrast and brighten dim photos a little
+    img = ImageOps.autocontrast(img, cutoff=0.5, preserve_tone=True)
+    mean = sum(img.convert("L").getdata()) / (img.width * img.height)
+    if mean < 110:
+        img = ImageEnhance.Brightness(img).enhance(min(1.3, 115 / max(mean, 1)))
+    img = img.filter(ImageFilter.UnsharpMask(radius=1.5, percent=60, threshold=3))
     img.thumbnail((MAX_SIZE, MAX_SIZE))
     out = io.BytesIO()
     img.save(out, "JPEG", quality=88, optimize=True)
@@ -926,7 +1035,7 @@ async def handle_listing_photos(message: discord.Message):
             files.append(discord.File(io.BytesIO(cleaned), filename=f"kit_{message.id}_{i}.jpg"))
         name, price, details = guess_from_caption(message.content)
         preview = await message.reply(
-            f"✨ Cleaned up {len(files)} photo(s): turned upright, trimmed edges, resized.\n"
+            f"✨ Cleaned up {len(files)} photo(s): straightened, cropped to the picture, brightened, resized.\n"
             "The **first** photo becomes the main product image. Click below to fill in the details.",
             files=files,
         )
