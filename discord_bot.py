@@ -26,6 +26,7 @@ Personal budget (talks to your Google Sheet; replies are private):
   /pantry ...       - pantry inventory (low stock goes on the grocery list)
   /trip ...         - vacation planner (savings, countdown, flights, hotels & bookings, itinerary, quotes)   /pack ... - packing list
   /resume ...       - build a resume step by step and get it as a PDF (lives in resume_bot.py)
+  /garnish ...      - track garnishments: balance left, deductions, paychecks to go (garnish_bot.py)
 Sold-out cleanup: when a kit sells out, it's marked sold, pulled from Google Shopping, and a "Just sold!" post goes to #new-kits.
 Social poster: new kits published on the website are posted to Facebook + Instagram automatically.
 Listing helper: drop kit photos in #add-listing -> StoltBot cleans them up -> click a button -> draft product.
@@ -2242,6 +2243,13 @@ try:
     resume_bot.setup(bot)
 except Exception as e:
     print(f"⚠️ Resume builder is off: {e}")
+
+# ===== GARNISHMENT TRACKER (garnish_bot.py) =====
+try:
+    import garnish_bot
+    garnish_bot.setup(bot)
+except Exception as e:
+    print(f"⚠️ Garnishment tracker is off: {e}")
 
 
 bot.run(TOKEN)
