@@ -900,7 +900,29 @@ def _find_art(bgr):
     if x1 - x0 < W * 0.5 or y1 - y0 < H * 0.5:
         return None
     pad = int(min(W, H) * 0.015)
-    return bgr[y0 + pad:y1 - pad, x0 + pad:x1 - pad]
+    return _trim_edges(bgr[y0 + pad:y1 - pad, x0 + pad:x1 - pad])
+
+
+def _trim_edges(bgr, max_frac=0.12):
+    """Shave leftover strips of white margin (with its printed color chart) off each side."""
+    H, W = bgr.shape[:2]
+    if H < 50 or W < 50:
+        return bgr
+    hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+    # margin paper: bright and pale (the chart's little colored squares are a small share of it)
+    bright = ((hsv[..., 2] > np.percentile(hsv[..., 2], 90) * 0.85) & (hsv[..., 1] < 60)).astype(np.float32)
+    col = bright.mean(0)
+    row = bright.mean(1)
+
+    def cut(profile, n):
+        lim, i = int(n * max_frac), 0
+        while i < lim and profile[i] > 0.35:
+            i += 1
+        return i + (int(n * 0.01) if i else 0)
+
+    l, r = cut(col, W), cut(col[::-1], W)
+    t, b = cut(row, H), cut(row[::-1], H)
+    return bgr[t:H - b, l:W - r]
 
 
 def clean_photo(data: bytes) -> bytes:
