@@ -11,7 +11,7 @@ Commands:
   /orders           - show the latest paid store orders (admins only, only you see it)
 Also: posts every new paid store order in the #orders channel (checks once a minute).
   /gshopping        - Google Shopping health check: approved / pending / disapproved + problems
-Google Shopping watchdog: checks daily and posts problems in #store-alerts.
+Google Shopping watchdog: checks daily and posts the result in #store-alerts (green when all good, alert when not).
   /sharekit         - post a kit from the website to Facebook/Instagram now
   /salesreport      - sales summary for a week/month/year, with a CSV for your books
 Weekly sales summary: every Monday morning in #orders.
@@ -409,11 +409,16 @@ async def google_shopping_watchdog():
         print(f"⚠️ Google Shopping check failed: {e}")
         return
     print("🛍️ Google Shopping check: " + ("problems found" if bad else "all good"))
-    if not bad:
-        return  # stay quiet when everything is fine
+    # Post every morning: a green "all good" on quiet days, a loud alert when something is wrong
+    if bad:
+        headline = "🚨 **Google Shopping found problems**"
+    elif embed.color == discord.Color.gold():
+        headline = "ℹ️ **Google Shopping: no approved products showing yet**"
+    else:
+        headline = "✅ **Google Shopping: all good this morning**"
     for channel in [c for g in bot.guilds for c in g.text_channels if c.name == ALERTS_CHANNEL_NAME]:
         try:
-            await channel.send(content="🚨 **Google Shopping found problems**", embed=embed)
+            await channel.send(content=headline, embed=embed)
         except discord.Forbidden:
             print(f"⚠️ No permission to post in #{channel.name}")
 
